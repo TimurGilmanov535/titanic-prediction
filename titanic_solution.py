@@ -1,74 +1,35 @@
 import pandas as pd
-import numpy as np
 from sklearn.ensemble import RandomForestClassifier
 
-print("Загрузка данных...")
 train = pd.read_csv('train.csv')
 test = pd.read_csv('test.csv')
 
-print(f"Train: {train.shape}, Test: {test.shape}")
+train['Sex'] = train['Sex'].map({'male': 0, 'female': 1})
+test['Sex'] = test['Sex'].map({'male': 0, 'female': 1})
 
+train['Age'] = train['Age'].fillna(train['Age'].median())
+test['Age'] = test['Age'].fillna(test['Age'].median())
 
-# ========== ПРОСТЫЕ ПРИЗНАКИ ==========
-def prepare_features(df, is_train=True):
-    df = df.copy()
+train['Fare'] = train['Fare'].fillna(train['Fare'].median())
+test['Fare'] = test['Fare'].fillna(test['Fare'].median())
 
-    # Пол
-    df['Sex'] = df['Sex'].map({'male': 0, 'female': 1})
+train['Embarked'] = train['Embarked'].fillna('S')
+test['Embarked'] = test['Embarked'].fillna('S')
+train['Embarked'] = train['Embarked'].map({'S': 0, 'C': 1, 'Q': 2})
+test['Embarked'] = test['Embarked'].map({'S': 0, 'C': 1, 'Q': 2})
 
-    # Возраст (заполняем пропуски медианой)
-    df['Age'] = df['Age'].fillna(df['Age'].median())
+train['FamilySize'] = train['SibSp'] + train['Parch']
+test['FamilySize'] = test['SibSp'] + test['Parch']
 
-    # Цена билета (заполняем пропуски медианой)
-    df['Fare'] = df['Fare'].fillna(df['Fare'].median())
+train['IsAlone'] = (train['FamilySize'] == 0).astype(int)
+test['IsAlone'] = (test['FamilySize'] == 0).astype(int)
 
-    # Порт посадки (заполняем самым частым)
-    df['Embarked'] = df['Embarked'].fillna('S')
-    df['Embarked'] = df['Embarked'].map({'S': 0, 'C': 1, 'Q': 2})
+features = ['Pclass', 'Sex', 'Age', 'Fare', 'Embarked', 'FamilySize', 'IsAlone']
 
-    # Размер семьи (SibSp + Parch)
-    df['FamilySize'] = df['SibSp'] + df['Parch']
+model = RandomForestClassifier(n_estimators=100, max_depth=10, random_state=42)
+model.fit(train[features], train['Survived'])
 
-    # Один ли плыл?
-    df['IsAlone'] = (df['FamilySize'] == 0).astype(int)
+predictions = model.predict(test[features])
 
-    # Выбираем только нужные признаки
-    features = ['Pclass', 'Sex', 'Age', 'Fare', 'Embarked', 'FamilySize', 'IsAlone']
-
-    return df[features]
-
-
-print("Подготовка признаков...")
-X_train = prepare_features(train)
-X_test = prepare_features(test)
-y_train = train['Survived']
-
-print(f"Признаков: {X_train.shape[1]}")
-
-# ========== ОБУЧЕНИЕ ==========
-print("Обучение Random Forest...")
-model = RandomForestClassifier(
-    n_estimators=100,
-    max_depth=10,
-    random_state=42,
-    n_jobs=-1
-)
-model.fit(X_train, y_train)
-
-# ========== ПРЕДСКАЗАНИЕ ==========
-test_pred = model.predict(X_test)
-
-# ========== СОЗДАНИЕ ФАЙЛА ДЛЯ KAGGLE ==========
-submission = pd.DataFrame({
-    'PassengerId': test['PassengerId'],
-    'Survived': test_pred
-})
-submission.to_csv('titanic_submission.csv', index=False)
-
-print("✅ Готово! titanic_submission.csv создан")
-print(submission.head())
-
-# Проверка точности на тренировочных данных
-train_pred = model.predict(X_train)
-train_acc = (train_pred == y_train).mean()
-print(f"Точность на обучении: {train_acc:.2%}")
+output = pd.DataFrame({'PassengerId': test['PassengerId'], 'Survived': predictions})
+output.to_csv('submission.csv', index=False)
